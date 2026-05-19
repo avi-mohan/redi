@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
-const { connectDb, runMigrations } = require('./src/db');
+const { connectDb } = require('./src/db');
 const { initBot, processUpdate } = require('./src/bot');
 const { startScheduler } = require('./src/scheduler');
 
@@ -17,7 +17,6 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 async function main() {
   await connectDb();
-  await runMigrations();
 
   const bot = initBot();
 
