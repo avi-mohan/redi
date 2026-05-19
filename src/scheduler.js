@@ -1,47 +1,59 @@
 const cron = require('node-cron');
-const { query } = require('./db');
-const { generateDailySummaries, generateAndUploadReport } = require('./reports');
+const { getAllVendors, getTransactionsForDate, updateDailySummary } = require('./db');
 const { getBot } = require('./bot');
 
 function startScheduler() {
-  const schedule = process.env.REPORT_CRON_SCHEDULE || '0 21 * * *';
-
-  cron.schedule(schedule, runNightlyReports, { timezone: 'Asia/Kolkata' });
-
-  console.log(`Scheduler started. Nightly reports cron: ${schedule} IST`);
+  // 10pm IST every night
+  cron.schedule('0 22 * * *', runNightlyReports, { timezone: 'Asia/Kolkata' });
+  console.log('Scheduler started. Nightly reports at 10pm IST.');
 }
 
 async function runNightlyReports() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getISTDate();
   console.log(`Running nightly reports for ${today}…`);
 
-  try {
-    await generateDailySummaries(today);
-  } catch (err) {
-    console.error('Failed to generate daily summaries:', err);
-    return;
-  }
-
-  const { rows: vendors } = await query('SELECT id, telegram_id FROM vendors');
+  const vendors = await getAllVendors();
   const bot = getBot();
 
   for (const vendor of vendors) {
     try {
-      const { url, report } = await generateAndUploadReport(vendor.id, today);
-
-      if (bot) {
-        await bot.sendMessage(
-          vendor.telegram_id,
-          `*Your Daily Report — ${today}*\n\n\`\`\`\n${report}\n\`\`\`\n\n[Download full report](${url})`,
-          { parse_mode: 'Markdown' }
-        );
-      }
+      await sendNightlyMessage(bot, vendor, today);
     } catch (err) {
-      console.error(`Failed report for vendor ${vendor.id}:`, err);
+      console.error(`Nightly report failed for vendor ${vendor.id}:`, err);
     }
   }
+}
 
-  console.log(`Nightly reports done for ${today}.`);
+async function sendNightlyMessage(bot, vendor, date) {
+  const transactions = await getTransactionsForDate(vendor.id, date);
+
+  if (transactions.length === 0) {
+    await bot.sendMessage(vendor.telegram_id, 'Aaj koi bikri nahi hui 😔 Kal aur achha hoga!');
+    await updateDailySummary(vendor.id, date, 0, 0);
+    return;
+  }
+
+  const totalRevenue = transactions.reduce((sum, t) => sum + Number(t.price), 0);
+
+  // Aggregate by item to find the top seller
+  const itemTotals = {};
+  for (const t of transactions) {
+    const key = t.item_name;
+    itemTotals[key] = (itemTotals[key] || 0) + Number(t.quantity);
+  }
+  const topItem = Object.entries(itemTotals).sort((a, b) => b[1] - a[1])[0];
+
+  await updateDailySummary(vendor.id, date, totalRevenue, transactions.length);
+
+  const message =
+    `Aaj ₹${totalRevenue} hua bhai 👍\n` +
+    `Top item: ${topItem[0]} (${topItem[1]} biki)`;
+
+  await bot.sendMessage(vendor.telegram_id, message);
+}
+
+function getISTDate() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 }
 
 module.exports = { startScheduler, runNightlyReports };

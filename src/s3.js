@@ -10,31 +10,29 @@ const s3 = new S3Client({
 
 const BUCKET = process.env.S3_BUCKET_NAME;
 
+async function uploadRawMessage(vendorId, data) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const key = `raw-messages/${vendorId}/${timestamp}.json`;
+
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: JSON.stringify(data),
+    ContentType: 'application/json',
+  }));
+
+  return key;
+}
+
 async function uploadReport(key, content) {
-  const command = new PutObjectCommand({
+  await s3.send(new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
     Body: content,
     ContentType: 'text/plain; charset=utf-8',
-  });
+  }));
 
-  await s3.send(command);
-
-  const url = `https://${BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-  console.log(`Report uploaded: ${url}`);
-  return url;
-}
-
-async function uploadJson(key, data) {
-  const command = new PutObjectCommand({
-    Bucket: BUCKET,
-    Key: key,
-    Body: JSON.stringify(data, null, 2),
-    ContentType: 'application/json',
-  });
-
-  await s3.send(command);
   return `https://${BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
-module.exports = { uploadReport, uploadJson };
+module.exports = { uploadRawMessage, uploadReport };
