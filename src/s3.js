@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3 = new S3Client({
@@ -8,7 +10,7 @@ const s3 = new S3Client({
   },
 });
 
-const BUCKET = process.env.S3_BUCKET_NAME;
+const BUCKET = process.env.AWS_S3_BUCKET;
 
 async function uploadRawMessage(vendorId, data) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

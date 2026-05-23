@@ -32,7 +32,8 @@ async function parseMessage(rawMessage) {
     messages: [{ role: 'user', content: rawMessage }],
   });
 
-  const text = response.content[0].text.trim();
+  const raw = response.content[0].text.trim();
+  const text = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
 
   let transactions;
   try {
