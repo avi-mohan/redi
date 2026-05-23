@@ -88,7 +88,8 @@ async function getTransactionsForDate(vendorId, date) {
   const { rows } = await pool.query(
     `SELECT item_name, quantity, price
      FROM transactions
-     WHERE vendor_id = $1 AND created_at::date = $2
+     WHERE vendor_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
      ORDER BY created_at`,
     [vendorId, date]
   );
