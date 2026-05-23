@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const { parseMessage } = require('./parser');
 const { registerVendor, getVendorByTelegramId, saveTransaction } = require('./db');
 const { uploadRawMessage } = require('./s3');
+const { buildTelegramSummary } = require('./reports');
 
 let bot;
 
@@ -10,6 +11,7 @@ function initBot() {
   bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 
   bot.onText(/\/start/, (msg) => handleStart(msg).catch(console.error));
+  bot.onText(/\/report/, (msg) => handleReport(msg).catch(console.error));
   bot.on('message', (msg) => handleMessage(msg).catch(console.error));
 
   return bot;
@@ -34,6 +36,19 @@ async function handleStart(msg) {
   } else {
     await bot.sendMessage(msg.chat.id, `वापस आ गए ${name}! 😊 बताओ, क्या बिका आज?`);
   }
+}
+
+async function handleReport(msg) {
+  const telegramId = String(msg.from.id);
+  const vendor = await getVendorByTelegramId(telegramId);
+
+  if (!vendor) {
+    return bot.sendMessage(msg.chat.id, '/start भेजो पहले 🙏');
+  }
+
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const message = await buildTelegramSummary(vendor.id, today);
+  await bot.sendMessage(msg.chat.id, message);
 }
 
 async function handleMessage(msg) {

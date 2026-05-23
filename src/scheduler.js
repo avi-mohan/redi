@@ -1,6 +1,7 @@
 const cron = require('node-cron');
-const { getAllVendors, getTransactionsForDate, updateDailySummary } = require('./db');
+const { getAllVendors } = require('./db');
 const { getBot } = require('./bot');
+const { buildTelegramSummary } = require('./reports');
 
 function startScheduler() {
   // 10pm IST every night
@@ -25,30 +26,7 @@ async function runNightlyReports() {
 }
 
 async function sendNightlyMessage(bot, vendor, date) {
-  const transactions = await getTransactionsForDate(vendor.id, date);
-
-  if (transactions.length === 0) {
-    await bot.sendMessage(vendor.telegram_id, 'Aaj koi bikri nahi hui 😔 Kal aur achha hoga!');
-    await updateDailySummary(vendor.id, date, 0, 0);
-    return;
-  }
-
-  const totalRevenue = transactions.reduce((sum, t) => sum + Number(t.price), 0);
-
-  // Aggregate by item to find the top seller
-  const itemTotals = {};
-  for (const t of transactions) {
-    const key = t.item_name;
-    itemTotals[key] = (itemTotals[key] || 0) + Number(t.quantity);
-  }
-  const topItem = Object.entries(itemTotals).sort((a, b) => b[1] - a[1])[0];
-
-  await updateDailySummary(vendor.id, date, totalRevenue, transactions.length);
-
-  const message =
-    `Aaj ₹${totalRevenue} hua bhai 👍\n` +
-    `Top item: ${topItem[0]} (${topItem[1]} biki)`;
-
+  const message = await buildTelegramSummary(vendor.id, date);
   await bot.sendMessage(vendor.telegram_id, message);
 }
 
