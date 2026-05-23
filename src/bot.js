@@ -1,8 +1,10 @@
+const https = require('https');
 const TelegramBot = require('node-telegram-bot-api');
 const { parseMessage } = require('./parser');
 const { registerVendor, getVendorByTelegramId, saveTransaction } = require('./db');
 const { uploadRawMessage } = require('./s3');
 const { buildTelegramSummary } = require('./reports');
+const { transcribeVoice } = require('./transcribe');
 
 let bot;
 
@@ -12,6 +14,7 @@ function initBot() {
 
   bot.onText(/\/start/, (msg) => handleStart(msg).catch(console.error));
   bot.onText(/\/report/, (msg) => handleReport(msg).catch(console.error));
+  bot.on('voice', (msg) => handleVoice(msg).catch(console.error));
   bot.on('message', (msg) => handleMessage(msg).catch(console.error));
 
   return bot;
@@ -90,6 +93,70 @@ async function handleMessage(msg) {
       : `लिख लिया ✅\n${lines}\n\nकुल: ₹${total}`;
 
   await bot.sendMessage(msg.chat.id, reply);
+}
+
+async function handleVoice(msg) {
+  const telegramId = String(msg.from.id);
+  const vendor = await getVendorByTelegramId(telegramId);
+
+  if (!vendor) {
+    return bot.sendMessage(msg.chat.id, '/start भेजो पहले 🙏');
+  }
+
+  await bot.sendMessage(msg.chat.id, '🎤 Suna, ek second...');
+
+  const fileLink = await bot.getFileLink(msg.voice.file_id);
+  const audioBuffer = await downloadBuffer(fileLink);
+  const timestamp = Date.now();
+
+  let transcript;
+  try {
+    transcript = await transcribeVoice(vendor.id, audioBuffer, timestamp);
+  } catch (err) {
+    console.error('Transcription error:', err);
+    return bot.sendMessage(msg.chat.id, 'आवाज़ समझ नहीं आई 🙏 फिर से भेजो');
+  }
+
+  if (!transcript || !transcript.trim()) {
+    return bot.sendMessage(msg.chat.id, 'आवाज़ साफ़ नहीं थी 🙏 फिर से बोलो');
+  }
+
+  let transactions;
+  try {
+    transactions = await parseMessage(transcript);
+  } catch (err) {
+    console.error('Parser error:', err);
+    return bot.sendMessage(msg.chat.id, 'कुछ गड़बड़ हुई, फिर से भेजो 🙏');
+  }
+
+  if (transactions.length === 0) {
+    return bot.sendMessage(msg.chat.id, 'समझ नहीं आया 🤔 जैसे बोलो: _"2 chai 20 ki"_', { parse_mode: 'Markdown' });
+  }
+
+  for (const t of transactions) {
+    await saveTransaction(vendor.id, t.item, t.quantity, t.price, transcript);
+  }
+
+  const lines = transactions.map((t) => `• ${t.item} × ${t.quantity} — ₹${t.price}`).join('\n');
+  const total = transactions.reduce((sum, t) => sum + Number(t.price), 0);
+
+  const reply =
+    transactions.length === 1
+      ? `लिख लिया ✅\n${lines}`
+      : `लिख लिया ✅\n${lines}\n\nकुल: ₹${total}`;
+
+  await bot.sendMessage(msg.chat.id, reply);
+}
+
+function downloadBuffer(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
 }
 
 function getBot() {

@@ -37,4 +37,14 @@ async function uploadReport(key, content) {
   return `https://${BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }
 
-module.exports = { uploadRawMessage, uploadReport };
+async function uploadVoice(key, buffer) {
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: buffer,
+    ContentType: 'audio/ogg',
+  }));
+  return key;
+}
+
+module.exports = { uploadRawMessage, uploadReport, uploadVoice };
