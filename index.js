@@ -1,5 +1,8 @@
 require('dotenv').config();
 
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const express = require('express');
 const { connectDb } = require('./src/db');
 const { initBot, processUpdate } = require('./src/bot');
@@ -15,6 +18,11 @@ app.post('/webhook', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+const redirectApp = express();
+redirectApp.use((req, res) => {
+  res.redirect(301, `https://${req.headers.host}${req.url}`);
+});
+
 async function main() {
   await connectDb();
 
@@ -27,8 +35,18 @@ async function main() {
 
   startScheduler();
 
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`Redi listening on port ${port}`));
+  const tlsOptions = {
+    cert: fs.readFileSync('/etc/letsencrypt/live/redi.avi-mohan.me/fullchain.pem'),
+    key:  fs.readFileSync('/etc/letsencrypt/live/redi.avi-mohan.me/privkey.pem'),
+  };
+
+  https.createServer(tlsOptions, app).listen(443, () =>
+    console.log('Redi listening on port 443 (HTTPS)')
+  );
+
+  http.createServer(redirectApp).listen(80, () =>
+    console.log('HTTP redirect listening on port 80')
+  );
 }
 
 main().catch((err) => {
