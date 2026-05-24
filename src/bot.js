@@ -1,7 +1,7 @@
 const https = require('https');
 const TelegramBot = require('node-telegram-bot-api');
 const { parseMessage } = require('./parser');
-const { registerVendor, getVendorByTelegramId, saveTransaction, saveExpense, logStockAlert } = require('./db');
+const { registerVendor, getVendorByTelegramId, saveTransaction, saveExpense, saveSavings, logStockAlert } = require('./db');
 const { uploadRawMessage } = require('./s3');
 const { buildTelegramSummary } = require('./reports');
 const { transcribeVoice } = require('./transcribe');
@@ -106,6 +106,10 @@ async function processText(chatId, vendor, rawText) {
     case 'expense':
       await saveExpense(vendor.id, parsed.amount, parsed.description, rawText);
       return reply(chatId, `खर्चा लिख लिया 💸\n₹${parsed.amount}${parsed.description ? ` — ${parsed.description}` : ''}`);
+
+    case 'savings':
+      await saveSavings(vendor.id, parsed.amount, rawText);
+      return reply(chatId, `₹${parsed.amount} बचत में डाल दिया 🐷`);
 
     case 'stock_out':
       await logStockAlert(vendor.id, parsed.item);

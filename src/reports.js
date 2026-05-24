@@ -1,4 +1,4 @@
-const { query, getTransactionsForDate, getExpensesForDate, getStockAlertsForDate, updateDailySummary } = require('./db');
+const { query, getTransactionsForDate, getExpensesForDate, getSavingsForDate, getStockAlertsForDate, updateDailySummary } = require('./db');
 const { uploadReport } = require('./s3');
 
 async function generateDailySummaries(date) {
@@ -77,19 +77,21 @@ async function generateAndUploadReport(vendorId, date) {
 }
 
 async function buildTelegramSummary(vendorId, date) {
-  const [transactions, expenses, stockAlerts] = await Promise.all([
+  const [transactions, expenses, savingsRows, stockAlerts] = await Promise.all([
     getTransactionsForDate(vendorId, date),
     getExpensesForDate(vendorId, date),
+    getSavingsForDate(vendorId, date),
     getStockAlertsForDate(vendorId, date),
   ]);
 
-  const kamayi  = transactions.reduce((s, t) => s + Number(t.price), 0);
-  const kharcha = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const bachat  = kamayi - kharcha;
+  const kamayi       = transactions.reduce((s, t) => s + Number(t.price), 0);
+  const kharcha      = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const bachat       = kamayi - kharcha;
+  const savingsToday = savingsRows.reduce((s, r) => s + Number(r.amount), 0);
 
   await updateDailySummary(vendorId, date, kamayi, transactions.length);
 
-  if (!kamayi && !kharcha && !stockAlerts.length) {
+  if (!kamayi && !kharcha && !savingsToday && !stockAlerts.length) {
     return 'आज कोई हिसाब नहीं मिला 😔 कल और अच्छा होगा!';
   }
 
@@ -99,6 +101,10 @@ async function buildTelegramSummary(vendorId, date) {
     `💸 खर्चा: ₹${kharcha}`,
     `🐷 बचत: ₹${bachat}`,
   ];
+
+  if (savingsToday > 0) {
+    lines.push(`🐷 बचत में डाला: ₹${savingsToday}`);
+  }
 
   if (transactions.length > 0) {
     const itemMap = {};

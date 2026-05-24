@@ -10,6 +10,7 @@ PostgreSQL tables (all timestamps stored in UTC):
   transactions(id, vendor_id, item_name, quantity, price, raw_message, created_at)
   expenses(id, vendor_id, amount, description, raw_message, created_at)
   savings(id, vendor_id, amount, raw_message, created_at)
+  savings(id, vendor_id, amount, raw_message, created_at)
   daily_summaries(id, vendor_id, date, total_revenue, transaction_count)
 
 IST date expression: (created_at AT TIME ZONE 'Asia/Kolkata')::date

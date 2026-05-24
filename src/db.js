@@ -159,6 +159,33 @@ async function getSavingsForDate(vendorId, date) {
   return rows;
 }
 
+async function saveSavings(vendorId, amount, rawMessage) {
+  const { rows } = await pool.query(
+    `INSERT INTO savings (vendor_id, amount, raw_message) VALUES ($1, $2, $3) RETURNING *`,
+    [vendorId, amount, rawMessage]
+  );
+  return rows[0];
+}
+
+async function getSavingsForDate(vendorId, date) {
+  const { rows } = await pool.query(
+    `SELECT amount FROM savings
+     WHERE vendor_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
+     ORDER BY created_at`,
+    [vendorId, date]
+  );
+  return rows;
+}
+
+async function getTotalSavings(vendorId) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM savings WHERE vendor_id = $1`,
+    [vendorId]
+  );
+  return Number(rows[0].total);
+}
+
 async function logStockAlert(vendorId, itemName) {
   const { rows } = await pool.query(
     `INSERT INTO stock_alerts (vendor_id, item_name) VALUES ($1, $2) RETURNING *`,
@@ -196,6 +223,9 @@ module.exports = {
   updateDailySummary,
   saveExpense,
   getExpensesForDate,
+  saveSavings,
+  getSavingsForDate,
+  getTotalSavings,
   logStockAlert,
   getStockAlertsForDate,
   query,

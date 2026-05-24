@@ -16,27 +16,32 @@ Return a single JSON object with a "type" field. Exactly one of these shapes:
    {"type":"expense","amount":N,"description":"..."}
    Examples: "stock mein 400 laga", "200 ka samaan liya", "bijli 150 diya"
 
-3. STOCK_OUT — vendor says an item has run out of stock:
+3. SAVINGS — vendor is manually putting money into savings:
+   {"type":"savings","amount":N}
+   Examples: "maine savings mein 300 daal diya", "300 bachat mein daala",
+             "aaj 100 bachaya", "200 bacha ke rakha", "savings mein 500 daala"
+
+4. STOCK_OUT — vendor says an item has run out of stock:
    {"type":"stock_out","item":"..."}
    Examples: "connect khatam ho gayi", "wills khatam", "thums up khatam ho gaya"
    The item field should be the properly capitalized brand/item name.
 
-4. REPORT — vendor is asking to see their daily summary:
+5. REPORT — vendor is asking to see their daily summary:
    {"type":"report"}
    Examples: "hisaab dikhao", "aaj ka hisaab", "kitna hua aaj", "report do",
              "hisaab batao", "aaj kya hua", "daily report", "aaj ka report",
              "kitna kamaya aaj", "aaj ka total"
 
-5. QUESTION — vendor asking a specific data question (NOT a general daily summary):
+6. QUESTION — vendor asking a specific data question (NOT a general daily summary):
    {"type":"question"}
    Examples: "wills kitni biki is hafte", "konsa item sabse zyada bika",
-             "kal se better raha", "last 3 din ka total"
+             "kal se better raha", "last 3 din ka total", "meri total bachat kitni hai"
 
-6. UNCLEAR — multiple items mentioned but only one combined price (cannot split fairly):
+7. UNCLEAR — multiple items mentioned but only one combined price (cannot split fairly):
    {"type":"unclear","items":["Item1","Item2"]}
    Example: "ek chai ek advance 28 rupay" → cannot know individual prices
 
-7. UNKNOWN — nothing recognized:
+8. UNKNOWN — nothing recognized:
    {"type":"unknown"}
 
 Common panwadi items (recognize these by name):
