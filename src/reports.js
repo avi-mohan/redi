@@ -1,4 +1,4 @@
-const { query, getTransactionsForDate, getExpensesForDate, getSavingsForDate, updateDailySummary } = require('./db');
+const { query, getTransactionsForDate, getExpensesForDate, getStockAlertsForDate, updateDailySummary } = require('./db');
 const { uploadReport } = require('./s3');
 
 async function generateDailySummaries(date) {
@@ -77,30 +77,58 @@ async function generateAndUploadReport(vendorId, date) {
 }
 
 async function buildTelegramSummary(vendorId, date) {
-  const [transactions, expenses, savingsRows] = await Promise.all([
+  const [transactions, expenses, stockAlerts] = await Promise.all([
     getTransactionsForDate(vendorId, date),
     getExpensesForDate(vendorId, date),
-    getSavingsForDate(vendorId, date),
+    getStockAlertsForDate(vendorId, date),
   ]);
 
   const kamayi  = transactions.reduce((s, t) => s + Number(t.price), 0);
   const kharcha = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const bachat  = savingsRows.reduce((s, r) => s + Number(r.amount), 0);
-  const haathMein = kamayi - kharcha - bachat;
+  const bachat  = kamayi - kharcha;
 
   await updateDailySummary(vendorId, date, kamayi, transactions.length);
 
-  if (!kamayi && !kharcha && !bachat) {
+  if (!kamayi && !kharcha && !stockAlerts.length) {
     return 'Aaj koi hisaab nahi mila 😔 Kal aur achha hoga!';
   }
 
-  return [
+  const lines = [
     'Aaj ka hisaab 📊',
     `💰 Kamayi: ₹${kamayi}`,
     `💸 Kharcha: ₹${kharcha}`,
     `🐷 Bachat: ₹${bachat}`,
-    `✅ Haath mein: ₹${haathMein}`,
-  ].join('\n');
+    `✅ Haath mein: ₹${bachat}`,
+  ];
+
+  if (transactions.length > 0) {
+    const itemMap = {};
+    for (const t of transactions) {
+      if (!itemMap[t.item_name]) itemMap[t.item_name] = { qty: 0, price: 0 };
+      itemMap[t.item_name].qty   += Number(t.quantity);
+      itemMap[t.item_name].price += Number(t.price);
+    }
+    lines.push('', 'Aaj kya bika:');
+    for (const [name, { qty, price }] of Object.entries(itemMap)) {
+      lines.push(`- ${name} × ${qty} — ₹${price}`);
+    }
+  }
+
+  if (expenses.length > 0) {
+    lines.push('', 'Kharche:');
+    for (const e of expenses) {
+      lines.push(`- ${e.description || 'Kharcha'} — ₹${e.amount}`);
+    }
+  }
+
+  if (stockAlerts.length > 0) {
+    lines.push('', 'Stock khatam:');
+    for (const a of stockAlerts) {
+      lines.push(`- ${a.item_name}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 module.exports = { generateDailySummaries, buildVendorReport, generateAndUploadReport, buildTelegramSummary };

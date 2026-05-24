@@ -159,6 +159,26 @@ async function getSavingsForDate(vendorId, date) {
   return rows;
 }
 
+async function logStockAlert(vendorId, itemName) {
+  const { rows } = await pool.query(
+    `INSERT INTO stock_alerts (vendor_id, item_name) VALUES ($1, $2) RETURNING *`,
+    [vendorId, itemName]
+  );
+  return rows[0];
+}
+
+async function getStockAlertsForDate(vendorId, date) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT item_name
+     FROM stock_alerts
+     WHERE vendor_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
+     ORDER BY item_name`,
+    [vendorId, date]
+  );
+  return rows;
+}
+
 // Low-level escape hatch for reports.js and ad-hoc queries
 async function query(text, params) {
   return pool.query(text, params);
@@ -176,7 +196,7 @@ module.exports = {
   updateDailySummary,
   saveExpense,
   getExpensesForDate,
-  saveSavings,
-  getSavingsForDate,
+  logStockAlert,
+  getStockAlertsForDate,
   query,
 };

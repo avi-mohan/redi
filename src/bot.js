@@ -1,12 +1,11 @@
 const https = require('https');
 const TelegramBot = require('node-telegram-bot-api');
 const { parseMessage } = require('./parser');
-const { registerVendor, getVendorByTelegramId, saveTransaction, saveExpense, saveSavings } = require('./db');
+const { registerVendor, getVendorByTelegramId, saveTransaction, saveExpense, logStockAlert } = require('./db');
 const { uploadRawMessage } = require('./s3');
 const { buildTelegramSummary } = require('./reports');
 const { transcribeVoice } = require('./transcribe');
 const { answerQuery } = require('./query');
-const { synthesize } = require('./polly');
 
 let bot;
 
@@ -15,7 +14,6 @@ function initBot() {
 
   bot.onText(/\/start/, (msg) => handleStart(msg).catch(console.error));
   bot.onText(/\/report/, (msg) => handleReport(msg).catch(console.error));
-  bot.onText(/\/savings\s+(\d+(?:\.\d+)?)/, (msg, match) => handleSavingsCmd(msg, match).catch(console.error));
   bot.on('voice', (msg) => handleVoice(msg).catch(console.error));
   bot.on('message', (msg) => handleMessage(msg).catch(console.error));
 
@@ -37,7 +35,7 @@ async function handleStart(msg) {
   if (vendor.created_now) {
     await reply(
       msg.chat.id,
-      `नमस्ते ${name}! 🙏 मैं Redi हूं।\n\nअपनी बिक्री बताओ, जैसे:\n"2 chai 20 ki, 3 samosa 30 mein"\n\nमैं सब लिख लूंगा! ✍️`
+      `नमस्ते ${name}! 🙏 मैं Redi हूं।\n\nबिक्री बताओ: "2 chai 20 ki"\nखर्चा बताओ: "stock mein 400 laga"\nहिसाब देखो: "hisaab dikhao"\n\nमैं सब लिख लूंगा! ✍️`
     );
   } else {
     await reply(msg.chat.id, `वापस आ गए ${name}! 😊 बताओ, क्या बिका आज?`);
@@ -48,18 +46,8 @@ async function handleReport(msg) {
   const vendor = await getVendorByTelegramId(String(msg.from.id));
   if (!vendor) return reply(msg.chat.id, '/start भेजो पहले 🙏');
 
-  const today = istDate();
-  const message = await buildTelegramSummary(vendor.id, today);
-  await reply(msg.chat.id, message);
-}
-
-async function handleSavingsCmd(msg, match) {
-  const vendor = await getVendorByTelegramId(String(msg.from.id));
-  if (!vendor) return reply(msg.chat.id, '/start भेजो पहले 🙏');
-
-  const amount = Number(match[1]);
-  await saveSavings(vendor.id, amount, msg.text);
-  await reply(msg.chat.id, `₹${amount} बचत में डाल दिया 🐷`);
+  const message = await buildTelegramSummary(vendor.id, istDate());
+  return reply(msg.chat.id, message);
 }
 
 // ── Message handlers ──────────────────────────────────────────────────────────
@@ -100,7 +88,7 @@ async function handleVoice(msg) {
   await processText(msg.chat.id, vendor, transcript);
 }
 
-// ── Shared text processing ────────────────────────────────────────────────────
+// ── Shared text routing ───────────────────────────────────────────────────────
 
 async function processText(chatId, vendor, rawText) {
   let parsed;
@@ -117,11 +105,16 @@ async function processText(chatId, vendor, rawText) {
 
     case 'expense':
       await saveExpense(vendor.id, parsed.amount, parsed.description, rawText);
-      return reply(chatId, `खर्चा लिख लिया 💸 ₹${parsed.amount} (${parsed.description || 'kharcha'})`);
+      return reply(chatId, `खर्चा लिख लिया 💸 ₹${parsed.amount}${parsed.description ? ` (${parsed.description})` : ''}`);
 
-    case 'savings':
-      await saveSavings(vendor.id, parsed.amount, rawText);
-      return reply(chatId, `₹${parsed.amount} बचत में डाल दिया 🐷`);
+    case 'stock_out':
+      await logStockAlert(vendor.id, parsed.item);
+      return reply(chatId, `${parsed.item} का स्टॉक नोट कर लिया 📝 रिपोर्ट में दिखेगा`);
+
+    case 'report': {
+      const message = await buildTelegramSummary(vendor.id, istDate());
+      return reply(chatId, message);
+    }
 
     case 'question':
       return handleQuestion(chatId, vendor, rawText);
@@ -146,12 +139,10 @@ async function handleSale(chatId, vendor, transactions, rawText) {
   }
 
   const lines = transactions.map((t) => `• ${t.item} × ${t.quantity} — ₹${t.price}`).join('\n');
-  const total = transactions.reduce((sum, t) => sum + Number(t.price), 0);
-
-  const text =
-    transactions.length === 1
-      ? `लिख लिया ✅\n${lines}`
-      : `लिख लिया ✅\n${lines}\n\nकुल: ₹${total}`;
+  const total  = transactions.reduce((sum, t) => sum + Number(t.price), 0);
+  const text   = transactions.length === 1
+    ? `लिख लिया ✅\n${lines}`
+    : `लिख लिया ✅\n${lines}\n\nकुल: ₹${total}`;
 
   return reply(chatId, text);
 }
@@ -167,21 +158,11 @@ async function handleQuestion(chatId, vendor, question) {
   return reply(chatId, answer);
 }
 
-// ── Reply helper (text + audio) ───────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function reply(chatId, text) {
-  await bot.sendMessage(chatId, text);
-  sendAudio(chatId, text).catch((err) => console.error('Polly error:', err));
+function reply(chatId, text) {
+  return bot.sendMessage(chatId, text);
 }
-
-async function sendAudio(chatId, text) {
-  const plain = text.replace(/[*_`[\]()~>#+=|{}.!\-]/g, '').trim();
-  if (!plain) return;
-  const audio = await synthesize(plain);
-  await bot.sendVoice(chatId, audio, {}, { filename: 'voice.mp3', contentType: 'audio/mpeg' });
-}
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
 
 function istDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
