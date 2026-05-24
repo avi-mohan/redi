@@ -39,8 +39,8 @@ Rules:
 - Return ONLY the raw SQL — no markdown, no explanation
 - Always start with SELECT
 - Always include WHERE vendor_id = $1 (or equivalent JOIN condition)
-- For today queries: use (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
-- For yesterday queries: use (created_at AT TIME ZONE 'Asia/Kolkata')::date = $3
+- For today queries: use (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2::date
+- For yesterday queries: use (created_at AT TIME ZONE 'Asia/Kolkata')::date = $3::date
 - For all-time / cumulative queries (e.g. total savings ever): omit the date filter entirely
 - NEVER hardcode a date string in the SQL
 - Never use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, GRANT, or REVOKE`,
@@ -52,10 +52,13 @@ Rules:
 
   assertSafeSQL(sql);
 
-  // Step 2: Run query
+  // Step 2: Run query — only pass as many params as the SQL actually uses
+  const allParams = [vendorId, today, yesterday];
+  const params = allParams.slice(0, highestParam(sql));
+
   let rows;
   try {
-    const result = await dbQuery(sql, [vendorId, today, yesterday]);
+    const result = await dbQuery(sql, params);
     rows = result.rows;
   } catch (err) {
     throw new Error(`Query execution failed: ${err.message}`);
@@ -78,6 +81,11 @@ Never use English words except brand names (Wills, Thums Up, Gold Flake, etc.).`
   });
 
   return answerResponse.content[0].text.trim();
+}
+
+function highestParam(sql) {
+  const nums = (sql.match(/\$(\d+)/g) || []).map((m) => parseInt(m.slice(1), 10));
+  return nums.length ? Math.max(...nums) : 0;
 }
 
 function assertSafeSQL(sql) {
