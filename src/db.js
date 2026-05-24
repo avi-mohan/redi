@@ -117,6 +117,48 @@ async function updateDailySummary(vendorId, date, revenue, count) {
   return rows[0];
 }
 
+async function saveExpense(vendorId, amount, description, rawMessage) {
+  const { rows } = await pool.query(
+    `INSERT INTO expenses (vendor_id, amount, description, raw_message)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [vendorId, amount, description, rawMessage]
+  );
+  return rows[0];
+}
+
+async function getExpensesForDate(vendorId, date) {
+  const { rows } = await pool.query(
+    `SELECT amount, description
+     FROM expenses
+     WHERE vendor_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
+     ORDER BY created_at`,
+    [vendorId, date]
+  );
+  return rows;
+}
+
+async function saveSavings(vendorId, amount, rawMessage) {
+  const { rows } = await pool.query(
+    `INSERT INTO savings (vendor_id, amount, raw_message)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [vendorId, amount, rawMessage]
+  );
+  return rows[0];
+}
+
+async function getSavingsForDate(vendorId, date) {
+  const { rows } = await pool.query(
+    `SELECT amount
+     FROM savings
+     WHERE vendor_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
+     ORDER BY created_at`,
+    [vendorId, date]
+  );
+  return rows;
+}
+
 // Low-level escape hatch for reports.js and ad-hoc queries
 async function query(text, params) {
   return pool.query(text, params);
@@ -132,5 +174,9 @@ module.exports = {
   getTransactionsForDate,
   getDailySummary,
   updateDailySummary,
+  saveExpense,
+  getExpensesForDate,
+  saveSavings,
+  getSavingsForDate,
   query,
 };

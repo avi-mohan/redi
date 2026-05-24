@@ -1,4 +1,4 @@
-const { query, getTransactionsForDate, updateDailySummary } = require('./db');
+const { query, getTransactionsForDate, getExpensesForDate, getSavingsForDate, updateDailySummary } = require('./db');
 const { uploadReport } = require('./s3');
 
 async function generateDailySummaries(date) {
@@ -77,24 +77,30 @@ async function generateAndUploadReport(vendorId, date) {
 }
 
 async function buildTelegramSummary(vendorId, date) {
-  const transactions = await getTransactionsForDate(vendorId, date);
+  const [transactions, expenses, savingsRows] = await Promise.all([
+    getTransactionsForDate(vendorId, date),
+    getExpensesForDate(vendorId, date),
+    getSavingsForDate(vendorId, date),
+  ]);
 
-  if (transactions.length === 0) {
-    await updateDailySummary(vendorId, date, 0, 0);
-    return 'Aaj koi bikri nahi hui 😔 Kal aur achha hoga!';
+  const kamayi  = transactions.reduce((s, t) => s + Number(t.price), 0);
+  const kharcha = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const bachat  = savingsRows.reduce((s, r) => s + Number(r.amount), 0);
+  const haathMein = kamayi - kharcha - bachat;
+
+  await updateDailySummary(vendorId, date, kamayi, transactions.length);
+
+  if (!kamayi && !kharcha && !bachat) {
+    return 'Aaj koi hisaab nahi mila 😔 Kal aur achha hoga!';
   }
 
-  const totalRevenue = transactions.reduce((sum, t) => sum + Number(t.price), 0);
-
-  const itemTotals = {};
-  for (const t of transactions) {
-    itemTotals[t.item_name] = (itemTotals[t.item_name] || 0) + Number(t.quantity);
-  }
-  const topItem = Object.entries(itemTotals).sort((a, b) => b[1] - a[1])[0];
-
-  await updateDailySummary(vendorId, date, totalRevenue, transactions.length);
-
-  return `Aaj ₹${totalRevenue} hua bhai 👍\nTop item: ${topItem[0]} (${topItem[1]} biki)`;
+  return [
+    'Aaj ka hisaab 📊',
+    `💰 Kamayi: ₹${kamayi}`,
+    `💸 Kharcha: ₹${kharcha}`,
+    `🐷 Bachat: ₹${bachat}`,
+    `✅ Haath mein: ₹${haathMein}`,
+  ].join('\n');
 }
 
 module.exports = { generateDailySummaries, buildVendorReport, generateAndUploadReport, buildTelegramSummary };
