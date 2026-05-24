@@ -35,7 +35,7 @@ async function handleStart(msg) {
   if (vendor.created_now) {
     await reply(
       msg.chat.id,
-      `नमस्ते ${name}! 🙏 मैं Redi हूं।\n\nबिक्री बताओ: "2 chai 20 ki"\nखर्चा बताओ: "stock mein 400 laga"\nहिसाब देखो: "hisaab dikhao"\n\nमैं सब लिख लूंगा! ✍️`
+      `नमस्ते ${name}! 🙏 मैं Redi हूं।\n\nबिक्री बताओ: "2 chai 20 ki"\nखर्चा बताओ: "stock mein 400 laga"\nहिसाब देखो: "hisaab dikhao"\n\nसब लिख लूंगा! ✍️`
     );
   } else {
     await reply(msg.chat.id, `वापस आ गए ${name}! 😊 बताओ, क्या बिका आज?`);
@@ -105,11 +105,11 @@ async function processText(chatId, vendor, rawText) {
 
     case 'expense':
       await saveExpense(vendor.id, parsed.amount, parsed.description, rawText);
-      return reply(chatId, `खर्चा लिख लिया 💸 ₹${parsed.amount}${parsed.description ? ` (${parsed.description})` : ''}`);
+      return reply(chatId, `खर्चा लिख लिया 💸\n₹${parsed.amount}${parsed.description ? ` — ${parsed.description}` : ''}`);
 
     case 'stock_out':
       await logStockAlert(vendor.id, parsed.item);
-      return reply(chatId, `${parsed.item} का स्टॉक नोट कर लिया 📝 रिपोर्ट में दिखेगा`);
+      return reply(chatId, `${parsed.item} का स्टॉक खत्म नोट कर लिया 📝`);
 
     case 'report': {
       const message = await buildTelegramSummary(vendor.id, istDate());
@@ -125,13 +125,13 @@ async function processText(chatId, vendor, rawText) {
     }
 
     default:
-      return reply(chatId, 'समझ नहीं आया 🤔 जैसे बताओ: "2 chai 20 ki"');
+      return reply(chatId, 'समझ नहीं आया 🤔 ऐसे बताओ: "2 chai 20 ki"');
   }
 }
 
 async function handleSale(chatId, vendor, transactions, rawText) {
   if (!transactions || transactions.length === 0) {
-    return reply(chatId, 'समझ नहीं आया 🤔 जैसे बताओ: "2 chai 20 ki"');
+    return reply(chatId, 'समझ नहीं आया 🤔 ऐसे बताओ: "2 chai 20 ki"');
   }
 
   for (const t of transactions) {

@@ -90,15 +90,14 @@ async function buildTelegramSummary(vendorId, date) {
   await updateDailySummary(vendorId, date, kamayi, transactions.length);
 
   if (!kamayi && !kharcha && !stockAlerts.length) {
-    return 'Aaj koi hisaab nahi mila 😔 Kal aur achha hoga!';
+    return 'आज कोई हिसाब नहीं मिला 😔 कल और अच्छा होगा!';
   }
 
   const lines = [
-    'Aaj ka hisaab 📊',
-    `💰 Kamayi: ₹${kamayi}`,
-    `💸 Kharcha: ₹${kharcha}`,
-    `🐷 Bachat: ₹${bachat}`,
-    `✅ Haath mein: ₹${bachat}`,
+    'आज का हिसाब 📊',
+    `💰 कमाई: ₹${kamayi}`,
+    `💸 खर्चा: ₹${kharcha}`,
+    `🐷 बचत: ₹${bachat}`,
   ];
 
   if (transactions.length > 0) {
@@ -108,21 +107,21 @@ async function buildTelegramSummary(vendorId, date) {
       itemMap[t.item_name].qty   += Number(t.quantity);
       itemMap[t.item_name].price += Number(t.price);
     }
-    lines.push('', 'Aaj kya bika:');
+    lines.push('', 'आज क्या बिका:');
     for (const [name, { qty, price }] of Object.entries(itemMap)) {
       lines.push(`- ${name} × ${qty} — ₹${price}`);
     }
   }
 
   if (expenses.length > 0) {
-    lines.push('', 'Kharche:');
+    lines.push('', 'खर्चे:');
     for (const e of expenses) {
-      lines.push(`- ${e.description || 'Kharcha'} — ₹${e.amount}`);
+      lines.push(`- ${e.description || 'खर्चा'} — ₹${e.amount}`);
     }
   }
 
   if (stockAlerts.length > 0) {
-    lines.push('', 'Stock khatam:');
+    lines.push('', 'स्टॉक खत्म:');
     for (const a of stockAlerts) {
       lines.push(`- ${a.item_name}`);
     }
