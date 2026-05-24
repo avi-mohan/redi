@@ -15,6 +15,7 @@ PostgreSQL tables (all timestamps stored in UTC):
 IST date expression: (created_at AT TIME ZONE 'Asia/Kolkata')::date
 Always scope every table query to: vendor_id = $1
 Use $1 as the placeholder for vendor_id — never embed it as a literal.
+Use $2 as the placeholder for today's IST date — never embed date strings in the SQL.
 `.trim();
 
 async function answerQuery(question, vendorId) {
@@ -28,13 +29,15 @@ async function answerQuery(question, vendorId) {
 
 ${SCHEMA}
 
-Today's IST date: ${today}
-Vendor ID placeholder: $1
+Parameters available in the query:
+  $1 = vendor_id (integer)
+  $2 = today's date in IST (date, e.g. 2026-05-24)
 
 Rules:
 - Return ONLY the raw SQL — no markdown, no explanation
 - Always start with SELECT
-- Always include WHERE vendor_id = $1 (or ON vendor_id = $1 in JOINs)
+- Always include WHERE vendor_id = $1 (or equivalent JOIN condition)
+- Use $2 wherever you need today's date — NEVER hardcode a date string
 - Never use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, GRANT, or REVOKE`,
     messages: [{ role: 'user', content: question }],
   });
@@ -47,7 +50,7 @@ Rules:
   // Step 2: Run query
   let rows;
   try {
-    const result = await dbQuery(sql, [vendorId]);
+    const result = await dbQuery(sql, [vendorId, today]);
     rows = result.rows;
   } catch (err) {
     throw new Error(`Query execution failed: ${err.message}`);
