@@ -10,17 +10,17 @@ PostgreSQL tables (all timestamps stored in UTC):
   transactions(id, vendor_id, item_name, quantity, price, raw_message, created_at)
   expenses(id, vendor_id, amount, description, raw_message, created_at)
   savings(id, vendor_id, amount, raw_message, created_at)
-  savings(id, vendor_id, amount, raw_message, created_at)
+  stock_alerts(id, vendor_id, item_name, created_at)
   daily_summaries(id, vendor_id, date, total_revenue, transaction_count)
 
 IST date expression: (created_at AT TIME ZONE 'Asia/Kolkata')::date
 Always scope every table query to: vendor_id = $1
-Use $1 as the placeholder for vendor_id — never embed it as a literal.
-Use $2 as the placeholder for today's IST date — never embed date strings in the SQL.
 `.trim();
 
 async function answerQuery(question, vendorId) {
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const istFmt  = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' });
+  const today     = istFmt.format(new Date());
+  const yesterday = istFmt.format(new Date(Date.now() - 86400000));
 
   // Step 1: Generate SQL
   const sqlResponse = await client.messages.create({
@@ -30,15 +30,19 @@ async function answerQuery(question, vendorId) {
 
 ${SCHEMA}
 
-Parameters available in the query:
+Parameters always available — use these, never hardcode dates or IDs:
   $1 = vendor_id (integer)
-  $2 = today's date in IST (date, e.g. 2026-05-24)
+  $2 = today's IST date (date)
+  $3 = yesterday's IST date (date)
 
 Rules:
 - Return ONLY the raw SQL — no markdown, no explanation
 - Always start with SELECT
 - Always include WHERE vendor_id = $1 (or equivalent JOIN condition)
-- Use $2 wherever you need today's date — NEVER hardcode a date string
+- For today queries: use (created_at AT TIME ZONE 'Asia/Kolkata')::date = $2
+- For yesterday queries: use (created_at AT TIME ZONE 'Asia/Kolkata')::date = $3
+- For all-time / cumulative queries (e.g. total savings ever): omit the date filter entirely
+- NEVER hardcode a date string in the SQL
 - Never use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, GRANT, or REVOKE`,
     messages: [{ role: 'user', content: question }],
   });
@@ -51,7 +55,7 @@ Rules:
   // Step 2: Run query
   let rows;
   try {
-    const result = await dbQuery(sql, [vendorId, today]);
+    const result = await dbQuery(sql, [vendorId, today, yesterday]);
     rows = result.rows;
   } catch (err) {
     throw new Error(`Query execution failed: ${err.message}`);
@@ -62,8 +66,9 @@ Rules:
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 256,
     system: `You are a helpful assistant for a small Indian street vendor.
-Answer their question in simple, warm Hindi (2-3 sentences max).
-Use ₹ for rupees. No English except brand names. No markdown.`,
+ALWAYS reply in Hindi only — even if the vendor's question was in English or any other language.
+Keep it short (1-3 sentences), warm, and simple. Use ₹ for rupees. No markdown.
+Never use English words except brand names (Wills, Thums Up, Gold Flake, etc.).`,
     messages: [
       {
         role: 'user',
