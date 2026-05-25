@@ -142,7 +142,10 @@ async function handleSale(chatId, vendor, transactions, rawText) {
     await saveTransaction(vendor.id, t.item, t.quantity, t.price, rawText);
   }
 
-  const lines = transactions.map((t) => `• ${t.item} × ${t.quantity} — ₹${t.price}`).join('\n');
+  const lines = transactions.map((t) => {
+    const qty = t.unit ? `${t.quantity} ${t.unit}` : t.quantity;
+    return `• ${t.item} × ${qty} — ₹${t.price}`;
+  }).join('\n');
   const total  = transactions.reduce((sum, t) => sum + Number(t.price), 0);
   const text   = transactions.length === 1
     ? `लिख लिया ✅\n${lines}`

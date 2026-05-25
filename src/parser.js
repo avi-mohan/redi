@@ -7,10 +7,24 @@ const SYSTEM_PROMPT = `You classify and parse messages from small Indian street 
 Return a single JSON object with a "type" field. Exactly one of these shapes:
 
 1. SALE — vendor sold items with individual prices:
-   {"type":"sale","transactions":[{"item":"...","quantity":N,"price":N}]}
-   Rules: price = total rupees for that line (not per unit)
-          "X ki/mein/ka/rs/rupee" = total is X
-          "ek"=1 "do"=2 "teen"=3 "char"=4 "paanch"=5
+   {"type":"sale","transactions":[{"item":"...","quantity":N,"unit":"...","price":N}]}
+   Rules:
+   - price = total rupees for that line (not per unit)
+   - "X ki/mein/ka/rs/rupee" = total is X
+   - "ek"=1 "do"=2 "teen"=3 "char"=4 "paanch"=5 "aadha"=0.5 "paav"=0.25
+   - Include "unit" only when explicitly stated. Recognised units:
+       kg, kilo → "kg"
+       gram, g  → "gram"
+       dozen    → "dozen"
+       piece, pcs, piec → "pcs"
+       litre, liter, litr → "litre"
+   - Omit "unit" entirely when no unit is mentioned
+   Examples:
+     "1 kg aam 100 ka"       → {"item":"aam","quantity":1,"unit":"kg","price":100}
+     "2 dozen kela 60 mein"  → {"item":"kela","quantity":2,"unit":"dozen","price":60}
+     "aadha kg angoor 40 ka" → {"item":"angoor","quantity":0.5,"unit":"kg","price":40}
+     "paav kg adrak 15 ka"   → {"item":"adrak","quantity":0.25,"unit":"kg","price":15}
+     "3 wills 36 mein"       → {"item":"Wills","quantity":3,"price":36}
 
 2. EXPENSE — vendor spent money on stock/supplies/bills:
    {"type":"expense","amount":N,"description":"..."}
@@ -44,11 +58,13 @@ Return a single JSON object with a "type" field. Exactly one of these shapes:
 8. UNKNOWN — nothing recognized:
    {"type":"unknown"}
 
-Common panwadi items (recognize these by name):
+Common items (recognize these by name):
   Cigarettes : Gold Flake, Wills, Classic, Navy Cut, Advance, Four Square, Bristol, Capstan, Connect
   Cold drinks: Thums Up, Pepsi, Sprite, Limca, Maaza, Frooti, Sting, Red Bull
   Snacks     : samosa, bread pakoda, chai, coffee, biscuit, chips, namkeen
   Pan/tobacco: pan, gutka, zarda, khaini, mawa
+  Fruits     : aam, kela, seb, angoor, santra, papita, tarbuj, kharbuja, nashpati, anaar, anannas, jamun, litchi, chiku, amrood
+  Vegetables : aalu, pyaaz, tamatar, palak, gobi, gajar, mooli, mirchi, adrak, lahsun, bhindi, baingan, kaddu, turai, karela
 
 Return ONLY raw JSON. No markdown, no explanation.`;
 
