@@ -48,7 +48,9 @@ Rules:
   });
 
   const sql = sqlResponse.content[0].text
-    .replace(/^```sql\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+    .replace(/^```sql\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+    .replace(/=\s*\$2\b/g, '= $2::date')
+    .replace(/=\s*\$3\b/g, '= $3::date');
 
   assertSafeSQL(sql);
 
